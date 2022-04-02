@@ -1,4 +1,5 @@
-# LilyGo-EPD-4-7-OWM-Weather-Display
+# LilyGo-EPD-4-7
+
 The LilyGO is an 4.7" e-paper screen. For this project the ESP32 will be located infront of a meetingroom.
 Currently, Open Weather Map is being used to show the weather on the LilyGo EPD 4.7" display.
 
