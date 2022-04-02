@@ -512,7 +512,7 @@ void DisplayTimeBox_comming(int x, int y) {
     String time = "16:00 - 24:00";
     drawString(x, y, time, LEFT);
 
-    y = y + 30;
+    y = y + 25;
     setFont(OpenSans8B);
     String details = "Available";
     if (details.length() <= 80) {
