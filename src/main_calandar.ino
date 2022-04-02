@@ -63,11 +63,12 @@ long SleepTimer    = 0;
 long Delta         = 30; // ESP32 rtc speed compensation, prevents display at xx:59:yy and then xx:00:yy (one minute later) to save power
 
 // fonts
-#include "opensans8b.h"
-#include "opensans10b.h"
-#include "opensans12b.h"
-#include "opensans18b.h"
-#include "opensans24b.h"
+#include <opensans8b.h>
+#include <opensans10b.h>
+#include <opensans12b.h>
+#include <opensans18b.h>
+#include <opensans14.h>
+#include <opensans24b.h>
 #include "moon.h"
 #include "sunrise.h"
 #include "sunset.h"
@@ -487,7 +488,7 @@ void DisplayTimeBox_current(int x, int y) {
     drawString(x, y, time, LEFT);
     y = y + 25;
 
-    setFont(OpenSans10B);
+    setFont(OpenSans14);
     String details = "Hello all, We would like to organize a borrel but also a short presentation hour to give the floor to our interns to present their assignment! We can start at 16.00 with the borrel...";
 
     uint8_t counter = 0;
