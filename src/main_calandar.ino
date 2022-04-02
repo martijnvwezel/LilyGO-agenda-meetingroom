@@ -41,6 +41,7 @@ boolean SmallIcon = false;
 #define Small 10 // For icon drawing
 String Time_str = "--:--:--";
 String Date_str = "-- --- ----";
+String internal_server_str = "000.000.000.000";
 int    wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0, EventCnt = 0, vref = 1100;
 //################ PROGRAM VARIABLES and OBJECTS ##########################################
 #define max_readings 24 // Limited to 3-days here, but could go to 5-days = 40 as the data is issued
@@ -118,6 +119,9 @@ uint8_t StartWiFi() {
     }
     if (connectionStatus == WL_CONNECTED) {
         wifi_signal = WiFi.RSSI(); // Get Wifi Signal strength now, because the WiFi will be turned off to save power!
+
+        internal_server_str = WiFi.localIP().toString();
+
         Serial.println("WiFi connected at: " + WiFi.localIP().toString());
     } else
         Serial.println("WiFi connection *** FAILED ***");
@@ -372,24 +376,25 @@ String TitleCase(String text) {
 void DisplayWeather() { // 4.7" e-paper display is 960x540 resolution
 
     DisplayGeneralInfoSection(); // Top line of the display
-    DisplayMainWeatherSection(50, 300);           // Centre section of display for Location, temperature, Weather report, current Wx Symbol(320, 110);           // Centre section of display for Location, temperature, Weather report, current Wx Symbol
-    // DisplayTimeBox_current(50, 100);
-    // DisplayTimeBox_comming(50, 300);
-    DisplayForecastSection(450, 400); // 3hr forecast boxes
+
+    DisplayTimeBox_current(50, 100);
+    DisplayTimeBox_comming(50, 300);
+
+    // * Weather stuff
+    // DisplayMainWeatherSection(450, 300);           // Centre section of display for Location, temperatur
+    // DisplayForecastSection(450, 350); // 3hr forecast boxes
 
 }
 
 void DisplayGeneralInfoSection() {
     setFont(OpenSans10B);
 
-    // drawString(5, 2, City, LEFT);
-    drawString(5, 2, internal_server, LEFT);
+    drawString(5, 2, "http://"+internal_server_str, LEFT);
     setFont(OpenSans8B);
     drawString(250, 2, Date_str + "  @   " + Time_str, LEFT);
 
     // * Wi-Fi signal strength and Battery voltage
     DisplayStatusSection(550, 20, wifi_signal);
-
 
     fillRect(10, 25, 960 - 20, 4, Black);
 }
@@ -438,9 +443,8 @@ void DisplayForecastSection(int x, int y) {
 }
 void DisplayMainWeatherSection(int x, int y) {
   setFont(OpenSans8B);
-  DisplayTempHumiPressSection(x, y - 60);
-  DisplayForecastTextSection(x - 55, y + 45);
-  DisplayVisiCCoverUVISection(x - 10, y + 95);
+  DisplayTempHumiPressSection(x, y );
+
 }
 void DisplayForecastTextSection(int x, int y) {
 #define lineWidth 34
@@ -508,7 +512,7 @@ void DisplayTimeBox_comming(int x, int y) {
     String time = "16:00 - 24:00";
     drawString(x, y, time, LEFT);
 
-    y = y + 20;
+    y = y + 30;
     setFont(OpenSans8B);
     String details = "Available";
     if (details.length() <= 80) {
