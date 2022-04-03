@@ -65,9 +65,11 @@ long Delta         = 30; // ESP32 rtc speed compensation, prevents display at xx
 // fonts
 #include <opensans8b.h>
 #include <opensans10b.h>
+#include <opensans12.h>
 #include <opensans12b.h>
 #include <opensans18b.h>
 #include <opensans14.h>
+#include <opensans14b.h>
 #include <opensans24b.h>
 #include "moon.h"
 #include "sunrise.h"
@@ -165,14 +167,23 @@ void setup() {
             byte       Attempts = 1;
             bool       RxWeather = false;
             bool RxForecast = false;
-            WiFiClient client;                                                     // wifi client object
+            WiFiClient client;
+
+                                                               // wifi client object
             while ((RxWeather == false || RxForecast == false) && Attempts <= 2) { // Try up-to 2 time for Weather and Forecast data
-                if (RxWeather == false)
-                    RxWeather = obtainWeatherData(client, "onecall");
-                if (RxForecast == false)
-                    RxForecast = obtainWeatherData(client, "forecast");
+            create_new_agenda(client, "I AM AWSOME");
+
+                // if (RxWeather == false)
+                //     RxWeather = obtainWeatherData(client, "onecall");
+                // if (RxForecast == false)
+                //     RxForecast = obtainWeatherData(client, "forecast");
                 Attempts++;
             }
+
+
+
+
+
             Serial.println("Received all weather data...");
             if (RxWeather && RxForecast) { // Only if received both Weather or Forecast proceed
                 StopWiFi();                // Reduces power consumption
@@ -334,6 +345,41 @@ bool obtainWeatherData(WiFiClient& client, const String& RequestType) {
     return true;
 }
 
+
+
+
+bool create_new_agenda(WiFiClient& client, const String& agenda_value) {
+    client.stop(); // close connection before sending a new request
+    HTTPClient http;
+    // HTTPSRedirect;
+
+
+
+    // /macros/s/{API key}/exec?title={agenda_value}
+    String uri = "/macros/s/"+web_app_token+"/exec"+"?title="+agenda_value;
+
+
+
+    http.begin(client, "script.google.com", 80, uri); // http.begin(uri,test_root_ca); //HTTPS example connection
+
+    int httpCode = http.GET();
+    if (httpCode == HTTP_CODE_OK) {
+        Serial.printf("Went successfull\n");
+
+        client.stop();
+    } else {
+        Serial.printf("connection failed, error: %s", http.errorToString(httpCode).c_str());
+        client.stop();
+        http.end();
+        return false;
+    }
+    http.end();
+    return true;
+}
+
+
+
+
 float mm_to_inches(float value_mm) {
     return 0.0393701 * value_mm;
 }
@@ -378,8 +424,18 @@ void DisplayWeather() { // 4.7" e-paper display is 960x540 resolution
 
     DisplayGeneralInfoSection(); // Top line of the display
 
-    DisplayTimeBox_current(50, 100);
-    DisplayTimeBox_comming(50, 300);
+    String time = "04:00 - 16:00";
+    String organisator = "Martijn van Wezel";
+    String titel = "End of the Month - Internal IT";
+    DisplayTimeBox_current(50, 100, time, organisator, titel);
+
+    time = "16:00 - 16:30";
+    String details = "Booked";
+    DisplayTimeBox_comming(50, 200, time, details);
+
+    time = "16:30 - 24:00";
+    details = "Available";
+    DisplayTimeBox_comming(50, 260, time, details);
 
     // * Weather stuff
     // DisplayMainWeatherSection(450, 300);           // Centre section of display for Location, temperatur
@@ -481,41 +537,56 @@ void DisplayTempHumiPressSection(int x, int y) {
   }
   drawString(x - 30, y + Yoffset, String(WxConditions[0].High, 0) + "° | " + String(WxConditions[0].Low, 0) + "° Hi/Lo", LEFT); // Show forecast high and Low
 }
-void DisplayTimeBox_current(int x, int y) {
+void DisplayTimeBox_current(int x, int y, String time, String organisator, String titel) {
 
     setFont(OpenSans18B);
-    String time = "04:00 - 16:00";
-    drawString(x, y, time, LEFT);
-    y = y + 25;
 
+    drawString(x, y, time, LEFT);
+    y = y + 30;
+
+    // setFont(OpenSans12B);
+
+    // drawString(x, y, "Organisator: ", LEFT);
+    // setFont(OpenSans12);
+    // drawString(x+200, y, organisator.substring(0, 20), LEFT);
     setFont(OpenSans14);
-    String details = "Hello all, We would like to organize a borrel but also a short presentation hour to give the floor to our interns to present their assignment! We can start at 16.00 with the borrel...";
+    drawString(x, y, organisator.substring(0, 20), LEFT);
+
+
+
+    x = x + 450;
+
+    setFont(OpenSans12);
+
 
     uint8_t counter = 0;
     uint8_t maxlength = 80;
-    while (details.length() >= counter) {
-        y = y + 30;
+    while (titel.length() >= counter) {
+
 
         if (counter+maxlength <= 180) {
-            drawString(x, y, details.substring(counter, counter + maxlength), LEFT);
+            drawString(x+20, y+5, titel.substring(counter, counter + maxlength), LEFT);
         } else {
             String endline = "...";
-            drawString(x, y, details.substring(counter, counter + maxlength - 3) + endline, LEFT);
+            drawString(x+20, y+5, titel.substring(counter, counter + maxlength - 3) + endline, LEFT);
         }
 
         counter = counter + maxlength;
+        y = y + 35;
     }
 }
 
-void DisplayTimeBox_comming(int x, int y) {
+void DisplayTimeBox_comming(int x, int y, String time, String details) {
+
+
 
     setFont(OpenSans12B);
-    String time = "16:00 - 24:00";
+
     drawString(x, y, time, LEFT);
 
     y = y + 25;
     setFont(OpenSans8B);
-    String details = "Available";
+
     if (details.length() <= 80) {
         drawString(x, y, details, LEFT);
     } else {
