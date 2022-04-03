@@ -4,6 +4,8 @@
 #include "freertos/task.h"     // In-built
 #include "epd_driver.h"        // https://github.com/Xinyuan-LilyGO/LilyGo-EPD47
 #include "esp_adc_cal.h"       // In-built
+#include <HTTPSRedirect.h> // In-built
+
 
 #include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 #include <HTTPClient.h>  // In-built
@@ -11,6 +13,8 @@
 #include <WiFi.h> // In-built
 #include <SPI.h>  // In-built
 #include <time.h> // In-built
+
+
 
 #include "owm_credentials.h"
 #include "forecast_record.h"
@@ -171,7 +175,7 @@ void setup() {
 
                                                                // wifi client object
             while ((RxWeather == false || RxForecast == false) && Attempts <= 2) { // Try up-to 2 time for Weather and Forecast data
-            create_new_agenda(client, "I AM AWSOME");
+                create_new_agenda( "I AM AWSOME");
 
                 // if (RxWeather == false)
                 //     RxWeather = obtainWeatherData(client, "onecall");
@@ -345,40 +349,51 @@ bool obtainWeatherData(WiFiClient& client, const String& RequestType) {
     return true;
 }
 
+bool create_new_agenda(const String& agenda_value) {
+    // * /macros/s/{API key}/exec?title={agenda_value}
 
 
+    // Use HTTPSRedirect class to create a new TLS connection
+    HTTPSRedirect*  client = new HTTPSRedirect(443);
+    client->setInsecure();
+    client->setPrintResponseBody(true);
+    client->setContentTypeHeader("application/json");
 
-bool create_new_agenda(WiFiClient& client, const String& agenda_value) {
-    client.stop(); // close connection before sending a new request
-    HTTPClient http;
-    // HTTPSRedirect;
+    Serial.print("Connecting to ");
+    Serial.println(host_google);
 
+    // Try to connect for a maximum of 5 times
+    bool flag = false;
+    for (int i = 0; i < 5; i++) {
+        int retval = client->connect(host_google, 443);
+        if (retval == 1) {
+        flag = true;
+        break;
+        }
+        else
+        Serial.println("Connection failed. Retrying...");
+    }
 
-
-    // /macros/s/{API key}/exec?title={agenda_value}
-    String uri = "/macros/s/"+web_app_token+"/exec"+"?title="+agenda_value;
-
-
-
-    http.begin(client, "script.google.com", 80, uri); // http.begin(uri,test_root_ca); //HTTPS example connection
-
-    int httpCode = http.GET();
-    if (httpCode == HTTP_CODE_OK) {
-        Serial.printf("Went successfull\n");
-
-        client.stop();
-    } else {
-        Serial.printf("connection failed, error: %s", http.errorToString(httpCode).c_str());
-        client.stop();
-        http.end();
+    if (!flag) {
+        Serial.print("Could not connect to server: ");
+        Serial.println(host_google);
+        Serial.println("Exiting...");
         return false;
     }
-    http.end();
+    Serial.println("Connected to Google");
+
+
+    // * Fetch Google Calendar events
+
+    String uri = web_app_token + "/exec" + "?title=" + agenda_value;
+    client->GET(uri, host_google);
+    String calendarData = client->getResponseBody();
+    Serial.print("Calendar Data---> ");
+    Serial.println(calendarData);
+
+    yield();
     return true;
 }
-
-
-
 
 float mm_to_inches(float value_mm) {
     return 0.0393701 * value_mm;
