@@ -4,8 +4,7 @@
 #include "freertos/task.h"     // In-built
 #include "epd_driver.h"        // https://github.com/Xinyuan-LilyGO/LilyGo-EPD47
 #include "esp_adc_cal.h"       // In-built
-#include <HTTPSRedirect.h> // In-built
-
+#include <HTTPSRedirect.h>     // In-built
 
 #include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 #include <HTTPClient.h>  // In-built
@@ -13,8 +12,6 @@
 #include <WiFi.h> // In-built
 #include <SPI.h>  // In-built
 #include <time.h> // In-built
-
-
 
 #include "owm_credentials.h"
 #include "forecast_record.h"
@@ -43,8 +40,8 @@ boolean LargeIcon = true;
 boolean SmallIcon = false;
 #define Large 20 // For icon drawing
 #define Small 10 // For icon drawing
-String Time_str = "--:--:--";
-String Date_str = "-- --- ----";
+String Time_str            = "--:--:--";
+String Date_str            = "-- --- ----";
 String internal_server_str = "000.000.000.000";
 int    wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0, EventCnt = 0, vref = 1100;
 //################ PROGRAM VARIABLES and OBJECTS ##########################################
@@ -168,14 +165,14 @@ void setup() {
         else
             WakeUp = (CurrentHour >= WakeupHour && CurrentHour <= SleepHour);
         if (WakeUp) {
-            byte       Attempts = 1;
-            bool       RxWeather = false;
-            bool RxForecast = false;
+            byte       Attempts   = 1;
+            bool       RxWeather  = false;
+            bool       RxForecast = false;
             WiFiClient client;
 
-                                                               // wifi client object
+            // wifi client object
             while ((RxWeather == false || RxForecast == false) && Attempts <= 2) { // Try up-to 2 time for Weather and Forecast data
-                create_new_agenda( "I AM AWSOME");
+                create_new_agenda("I_AM_AWSOME");
 
                 // if (RxWeather == false)
                 //     RxWeather = obtainWeatherData(client, "onecall");
@@ -183,10 +180,6 @@ void setup() {
                 //     RxForecast = obtainWeatherData(client, "forecast");
                 Attempts++;
             }
-
-
-
-
 
             Serial.println("Received all weather data...");
             if (RxWeather && RxForecast) { // Only if received both Weather or Forecast proceed
@@ -198,8 +191,7 @@ void setup() {
                 epd_poweroff_all();        // Switch off all power to EPD
             }
         }
-    }
-    else {
+    } else {
         epd_poweron();      // Switch on EPD display
         epd_clear();        // Clear the screen
         DisplayWeather();   // Display the weather data
@@ -209,11 +201,6 @@ void setup() {
     BeginSleep();
 }
 
-void Convert_Readings_to_Imperial() { // Only the first 3-hours are used
-    WxConditions[0].Pressure = hPa_to_inHg(WxConditions[0].Pressure);
-    WxForecast[0].Rainfall   = mm_to_inches(WxForecast[0].Rainfall);
-    WxForecast[0].Snowfall   = mm_to_inches(WxForecast[0].Snowfall);
-}
 
 bool DecodeWeather(WiFiClient& json, String Type) {
     Serial.print(F("\nCreating object...and "));
@@ -306,8 +293,6 @@ bool DecodeWeather(WiFiClient& json, String Type) {
         if (pressure_trend == 0)
             WxConditions[0].Trend = "0";
 
-        if (Units == "I")
-            Convert_Readings_to_Imperial();
     }
     return true;
 }
@@ -325,59 +310,58 @@ String ConvertUnixTime(int unix_time) {
     return output;
 }
 //#########################################################################################
-bool obtainWeatherData(WiFiClient& client, const String& RequestType) {
-    const String units = (Units == "M" ? "metric" : "imperial");
-    client.stop(); // close connection before sending a new request
-    HTTPClient http;
-    // api.openweathermap.org/data/2.5/RequestType?lat={lat}&lon={lon}&appid={API key}
-    String uri = "/data/2.5/" + RequestType + "?lat=" + Latitude + "&lon=" + Longitude + "&appid=" + apikey + "&mode=json&units=" + units + "&lang=" + Language;
-    if (RequestType == "onecall")
-        uri += "&exclude=minutely,hourly,alerts,daily";
-    http.begin(client, server, 80, uri); // http.begin(uri,test_root_ca); //HTTPS example connection
-    int httpCode = http.GET();
-    if (httpCode == HTTP_CODE_OK) {
-        if (!DecodeWeather(http.getStream(), RequestType))
-            return false;
-        client.stop();
-    } else {
-        Serial.printf("connection failed, error: %s", http.errorToString(httpCode).c_str());
-        client.stop();
-        http.end();
-        return false;
-    }
-    http.end();
-    return true;
-}
 
-bool create_new_agenda(const String& agenda_value) {
+HTTPSRedirect* client_httpdirect = nullptr;
+
+bool           create_new_agenda(const String& agenda_value) {
     // * /macros/s/{API key}/exec?title={agenda_value}
 
 
+    uint32_t freeHeap        = ESP.getFreeHeap();
+    uint32_t MIN_HEAPSIZE    = 9000;
+    uint32_t CLIENT_HEAPSIZE = 30000;
+    // attempt to correct dwindling heap with v2.4.1 of library
+    if (freeHeap < MIN_HEAPSIZE) {
+        if (client_httpdirect != nullptr) {
+            Serial.println("Deleting client - heap = " + String(freeHeap));
+            delete client_httpdirect;
+            client_httpdirect = nullptr;
+        }
+    } else if ((freeHeap > CLIENT_HEAPSIZE) && (client_httpdirect == nullptr)) {
+        Serial.println("Creating client - heap = " + String(freeHeap));
+    }
+
+
+
+
+
+
+
+    delay(100);
     // Use HTTPSRedirect class to create a new TLS connection
-    HTTPSRedirect*  client = new HTTPSRedirect(443);
-    client->setInsecure();
-    client->setPrintResponseBody(true);
-    client->setContentTypeHeader("application/json");
+    HTTPSRedirect* client_httpdirect = new HTTPSRedirect(443);
+    // client_httpdirect->setInsecure();
+    client_httpdirect->setPrintResponseBody(false);
 
     Serial.print("Connecting to ");
     Serial.println(host_google);
-
+    Serial.println("No client to create event! - heap = " + String(ESP.getFreeHeap()));
     // Try to connect for a maximum of 5 times
     bool flag = false;
     for (int i = 0; i < 5; i++) {
-        int retval = client->connect(host_google, 443);
+        int retval = client_httpdirect->connect(host_google, 443);
         if (retval == 1) {
-        flag = true;
-        break;
-        }
-        else
-        Serial.println("Connection failed. Retrying...");
+            flag = true;
+            break;
+        } else
+            Serial.println("Connection failed. Retrying...");
     }
 
     if (!flag) {
         Serial.print("Could not connect to server: ");
         Serial.println(host_google);
         Serial.println("Exiting...");
+        delete client_httpdirect;
         return false;
     }
     Serial.println("Connected to Google");
@@ -385,83 +369,46 @@ bool create_new_agenda(const String& agenda_value) {
 
     // * Fetch Google Calendar events
 
-    String uri = web_app_token + "/exec" + "?title=" + agenda_value;
-    client->GET(uri, host_google);
-    String calendarData = client->getResponseBody();
+    String uri = String("/macros/s/") + web_app_token + String("/exec") + String("?title=") + agenda_value;
+    Serial.println(host_google + uri);
+
+    client_httpdirect->GET(uri, host_google);
+
+    String calendarData = client_httpdirect->getResponseBody();
     Serial.print("Calendar Data---> ");
     Serial.println(calendarData);
+    Serial.println("");
 
-    yield();
+    delete client_httpdirect;
     return true;
-}
-
-float mm_to_inches(float value_mm) {
-    return 0.0393701 * value_mm;
-}
-
-float hPa_to_inHg(float value_hPa) {
-    return 0.02953 * value_hPa;
-}
-
-int JulianDate(int d, int m, int y) {
-    int mm, yy, k1, k2, k3, j;
-    yy = y - (int)((12 - m) / 10);
-    mm = m + 9;
-    if (mm >= 12)
-        mm = mm - 12;
-    k1 = (int)(365.25 * (yy + 4712));
-    k2 = (int)(30.6001 * mm + 0.5);
-    k3 = (int)((int)((yy / 100) + 49) * 0.75) - 38;
-    // 'j' for dates in Julian calendar:
-    j = k1 + k2 + d + 59 + 1;
-    if (j > 2299160)
-        j = j - k3; // 'j' is the Julian date at 12h UT (Universal Time) For Gregorian calendar:
-    return j;
-}
-
-float SumOfPrecip(float DataArray[], int readings) {
-    float sum = 0;
-    for (int i = 0; i <= readings; i++)
-        sum += DataArray[i];
-    return sum;
-}
-
-String TitleCase(String text) {
-    if (text.length() > 0) {
-        String temp_text = text.substring(0, 1);
-        temp_text.toUpperCase();
-        return temp_text + text.substring(1); // Title-case the string
-    } else
-        return text;
 }
 
 void DisplayWeather() { // 4.7" e-paper display is 960x540 resolution
 
     DisplayGeneralInfoSection(); // Top line of the display
 
-    String time = "04:00 - 16:00";
+    String time        = "04:00 - 16:00";
     String organisator = "Martijn van Wezel";
-    String titel = "End of the Month - Internal IT";
+    String titel       = "End of the Month - Internal IT";
     DisplayTimeBox_current(50, 100, time, organisator, titel);
 
-    time = "16:00 - 16:30";
+    time           = "16:00 - 16:30";
     String details = "Booked";
     DisplayTimeBox_comming(50, 200, time, details);
 
-    time = "16:30 - 24:00";
+    time    = "16:30 - 24:00";
     details = "Available";
     DisplayTimeBox_comming(50, 260, time, details);
 
     // * Weather stuff
     // DisplayMainWeatherSection(450, 300);           // Centre section of display for Location, temperatur
     // DisplayForecastSection(450, 350); // 3hr forecast boxes
-
 }
 
 void DisplayGeneralInfoSection() {
     setFont(OpenSans10B);
 
-    drawString(5, 2, "http://"+internal_server_str, LEFT);
+    drawString(5, 2, "http://" + internal_server_str, LEFT);
     setFont(OpenSans8B);
     drawString(250, 2, Date_str + "  @   " + Time_str, LEFT);
 
@@ -473,85 +420,6 @@ void DisplayGeneralInfoSection() {
 
 
 
-void DisplayVisiCCoverUVISection(int x, int y) {
-    setFont(OpenSans12B);
-    Serial.print("==========================");
-    Serial.println(WxConditions[0].Visibility);
-    Visibility(x + 5, y, String(WxConditions[0].Visibility) + "M");
-    CloudCover(x + 155, y, WxConditions[0].Cloudcover);
-    Display_UVIndexLevel(x + 265, y, WxConditions[0].UVI);
-}
-
-void Display_UVIndexLevel(int x, int y, float UVI) {
-    String Level = "";
-    if (UVI <= 2)
-        Level = " (L)";
-    if (UVI >= 3 && UVI <= 5)
-        Level = " (M)";
-    if (UVI >= 6 && UVI <= 7)
-        Level = " (H)";
-    if (UVI >= 8 && UVI <= 10)
-        Level = " (VH)";
-    if (UVI >= 11)
-        Level = " (EX)";
-    drawString(x + 20, y - 5, String(UVI, (UVI < 0 ? 1 : 0)) + Level, LEFT);
-    DrawUVI(x - 10, y - 5);
-}
-
-void DisplayForecastWeather(int x, int y, int index, int fwidth) {
-    x = x + fwidth * index;
-    DisplayConditionsSection(x + fwidth / 2 - 5, y + 85, WxForecast[index].Icon, SmallIcon);
-    setFont(OpenSans10B);
-    drawString(x + fwidth / 2, y + 30, String(ConvertUnixTime(WxForecast[index].Dt + WxConditions[0].FTimezone).substring(0, 5)), CENTER);
-    drawString(x + fwidth / 2, y + 130, String(WxForecast[index].High, 0) + "°/" + String(WxForecast[index].Low, 0) + "°", CENTER);
-}
-
-void DisplayForecastSection(int x, int y) {
-    int f = 0;
-    do {
-        DisplayForecastWeather(x, y, f, 82); // x,y cordinates, forecatsr number, spacing width
-        f++;
-    } while (f < MAX_FOR_CASTS);
-}
-void DisplayMainWeatherSection(int x, int y) {
-  setFont(OpenSans8B);
-  DisplayTempHumiPressSection(x, y );
-
-}
-void DisplayForecastTextSection(int x, int y) {
-#define lineWidth 34
-  setFont(OpenSans12B);
-  String Wx_Description = WxConditions[0].Forecast0;
-  Wx_Description.replace(".", ""); // remove any '.'
-  int spaceRemaining = 0, p = 0, charCount = 0, Width = lineWidth;
-  while (p < Wx_Description.length()) {
-    if (Wx_Description.substring(p, p + 1) == " ") spaceRemaining = p;
-    if (charCount > Width - 1) { // '~' is the end of line marker
-      Wx_Description = Wx_Description.substring(0, spaceRemaining) + "~" + Wx_Description.substring(spaceRemaining + 1);
-      charCount = 0;
-    }
-    p++;
-    charCount++;
-  }
-  if (WxForecast[0].Rainfall > 0) Wx_Description += " (" + String(WxForecast[0].Rainfall, 1) + String((Units == "M" ? "mm" : "in")) + ")";
-  String Line1 = Wx_Description.substring(0, Wx_Description.indexOf("~"));
-  String Line2 = Wx_Description.substring(Wx_Description.indexOf("~") + 1);
-  drawString(x + 30, y + 5, TitleCase(Line1), LEFT);
-  if (Line1 != Line2) drawString(x + 30, y + 30, Line2, LEFT);
-}
-
-void DisplayTempHumiPressSection(int x, int y) {
-  setFont(OpenSans18B);
-  drawString(x - 30, y, String(WxConditions[0].Temperature, 1) + "°   " + String(WxConditions[0].Humidity, 0) + "%", LEFT);
-  setFont(OpenSans12B);
-//   DrawPressureAndTrend(x + 195, y + 15, WxConditions[0].Pressure, WxConditions[0].Trend);
-  int Yoffset = 42;
-  if (WxConditions[0].Windspeed > 0) {
-    drawString(x - 30, y + Yoffset, String(WxConditions[0].FeelsLike, 1) + "° FL", LEFT);   // Show FeelsLike temperature if windspeed > 0
-    Yoffset += 30;
-  }
-  drawString(x - 30, y + Yoffset, String(WxConditions[0].High, 0) + "° | " + String(WxConditions[0].Low, 0) + "° Hi/Lo", LEFT); // Show forecast high and Low
-}
 void DisplayTimeBox_current(int x, int y, String time, String organisator, String titel) {
 
     setFont(OpenSans18B);
@@ -567,33 +435,27 @@ void DisplayTimeBox_current(int x, int y, String time, String organisator, Strin
     setFont(OpenSans14);
     drawString(x, y, organisator.substring(0, 20), LEFT);
 
-
-
     x = x + 450;
 
     setFont(OpenSans12);
 
-
-    uint8_t counter = 0;
+    uint8_t counter   = 0;
     uint8_t maxlength = 80;
     while (titel.length() >= counter) {
 
-
-        if (counter+maxlength <= 180) {
-            drawString(x+20, y+5, titel.substring(counter, counter + maxlength), LEFT);
+        if (counter + maxlength <= 180) {
+            drawString(x + 20, y + 5, titel.substring(counter, counter + maxlength), LEFT);
         } else {
             String endline = "...";
-            drawString(x+20, y+5, titel.substring(counter, counter + maxlength - 3) + endline, LEFT);
+            drawString(x + 20, y + 5, titel.substring(counter, counter + maxlength - 3) + endline, LEFT);
         }
 
         counter = counter + maxlength;
-        y = y + 35;
+        y       = y + 35;
     }
 }
 
 void DisplayTimeBox_comming(int x, int y, String time, String details) {
-
-
 
     setFont(OpenSans12B);
 
@@ -610,95 +472,10 @@ void DisplayTimeBox_comming(int x, int y, String time, String details) {
     }
 }
 
-
-
-
-
-
-
-
-void DisplayGraphSection(int x, int y) {
-    int r = 0;
-    do { // Pre-load temporary arrays with with data - because C parses by reference and remember that[1] has already been converted to I units
-        if (Units == "I")
-            pressure_readings[r] = WxForecast[r].Pressure * 0.02953;
-        else
-            pressure_readings[r] = WxForecast[r].Pressure;
-        if (Units == "I")
-            rain_readings[r] = WxForecast[r].Rainfall * 0.0393701;
-        else
-            rain_readings[r] = WxForecast[r].Rainfall;
-        if (Units == "I")
-            snow_readings[r] = WxForecast[r].Snowfall * 0.0393701;
-        else
-            snow_readings[r] = WxForecast[r].Snowfall;
-        temperature_readings[r] = WxForecast[r].Temperature;
-        humidity_readings[r]    = WxForecast[r].Humidity;
-        r++;
-    } while (r < max_readings);
-    int gwidth = 175, gheight = 100;
-    int gx  = (SCREEN_WIDTH - gwidth * 4) / 5 + 8;
-    int gy  = (SCREEN_HEIGHT - gheight - 30);
-    int gap = gwidth + gx;
-    // (x,y,width,height,MinValue, MaxValue, Title, Data Array, AutoScale, ChartMode)
-    DrawGraph(gx + 0 * gap, gy, gwidth, gheight, 900, 1050, Units == "M" ? TXT_PRESSURE_HPA : TXT_PRESSURE_IN, pressure_readings, max_readings, autoscale_on, barchart_off);
-    DrawGraph(gx + 1 * gap, gy, gwidth, gheight, 10, 30, Units == "M" ? TXT_TEMPERATURE_C : TXT_TEMPERATURE_F, temperature_readings, max_readings, autoscale_on, barchart_off);
-    DrawGraph(gx + 2 * gap, gy, gwidth, gheight, 0, 100, TXT_HUMIDITY_PERCENT, humidity_readings, max_readings, autoscale_off, barchart_off);
-    if (SumOfPrecip(rain_readings, max_readings) >= SumOfPrecip(snow_readings, max_readings))
-        DrawGraph(gx + 3 * gap + 5, gy, gwidth, gheight, 0, 30, Units == "M" ? TXT_RAINFALL_MM : TXT_RAINFALL_IN, rain_readings, max_readings, autoscale_on, barchart_on);
-    else
-        DrawGraph(gx + 3 * gap + 5, gy, gwidth, gheight, 0, 30, Units == "M" ? TXT_SNOWFALL_MM : TXT_SNOWFALL_IN, snow_readings, max_readings, autoscale_on, barchart_on);
-}
-
-void DisplayConditionsSection(int x, int y, String IconName, bool IconSize) {
-    Serial.println("Icon name: " + IconName);
-    if (IconName == "01d" || IconName == "01n")
-        ClearSky(x, y, IconSize, IconName);
-    else if (IconName == "02d" || IconName == "02n")
-        FewClouds(x, y, IconSize, IconName);
-    else if (IconName == "03d" || IconName == "03n")
-        ScatteredClouds(x, y, IconSize, IconName);
-    else if (IconName == "04d" || IconName == "04n")
-        BrokenClouds(x, y, IconSize, IconName);
-    else if (IconName == "09d" || IconName == "09n")
-        ChanceRain(x, y, IconSize, IconName);
-    else if (IconName == "10d" || IconName == "10n")
-        Rain(x, y, IconSize, IconName);
-    else if (IconName == "11d" || IconName == "11n")
-        Thunderstorms(x, y, IconSize, IconName);
-    else if (IconName == "13d" || IconName == "13n")
-        Snow(x, y, IconSize, IconName);
-    else if (IconName == "50d" || IconName == "50n")
-        Mist(x, y, IconSize, IconName);
-    else
-        Nodata(x, y, IconSize, IconName);
-}
-
-void arrow(int x, int y, int asize, float aangle, int pwidth, int plength) {
-    float dx    = (asize - 10) * cos((aangle - 90) * PI / 180) + x; // calculate X position
-    float dy    = (asize - 10) * sin((aangle - 90) * PI / 180) + y; // calculate Y position
-    float x1    = 0;
-    float y1    = plength;
-    float x2    = pwidth / 2;
-    float y2    = pwidth / 2;
-    float x3    = -pwidth / 2;
-    float y3    = pwidth / 2;
-    float angle = aangle * PI / 180 - 135;
-    float xx1   = x1 * cos(angle) - y1 * sin(angle) + dx;
-    float yy1   = y1 * cos(angle) + x1 * sin(angle) + dy;
-    float xx2   = x2 * cos(angle) - y2 * sin(angle) + dx;
-    float yy2   = y2 * cos(angle) + x2 * sin(angle) + dy;
-    float xx3   = x3 * cos(angle) - y3 * sin(angle) + dx;
-    float yy3   = y3 * cos(angle) + x3 * sin(angle) + dy;
-    fillTriangle(xx1, yy1, xx3, yy3, xx2, yy2, Black);
-}
-
 void DrawSegment(int x, int y, int o1, int o2, int o3, int o4, int o11, int o12, int o13, int o14) {
     drawLine(x + o1, y + o2, x + o3, y + o4, Black);
     drawLine(x + o11, y + o12, x + o13, y + o14, Black);
 }
-
-
 
 void DisplayStatusSection(int x, int y, int rssi) {
     setFont(OpenSans8B);
@@ -772,243 +549,6 @@ void DrawBattery(int x, int y) {
         fillRect(x + 27, y - 12, 36 * percentage / 100.0, 11, Black);
         drawString(x + 85, y - 14, String(percentage) + "%  " + String(voltage, 1) + "v", LEFT);
     }
-}
-
-// Symbols are drawn on a relative 10x10grid and 1 scale unit = 1 drawing unit
-void addcloud(int x, int y, int scale, int linesize) {
-    fillCircle(x - scale * 3, y, scale, Black);                                                              // Left most circle
-    fillCircle(x + scale * 3, y, scale, Black);                                                              // Right most circle
-    fillCircle(x - scale, y - scale, scale * 1.4, Black);                                                    // left middle upper circle
-    fillCircle(x + scale * 1.5, y - scale * 1.3, scale * 1.75, Black);                                       // Right middle upper circle
-    fillRect(x - scale * 3 - 1, y - scale, scale * 6, scale * 2 + 1, Black);                                 // Upper and lower lines
-    fillCircle(x - scale * 3, y, scale - linesize, White);                                                   // Clear left most circle
-    fillCircle(x + scale * 3, y, scale - linesize, White);                                                   // Clear right most circle
-    fillCircle(x - scale, y - scale, scale * 1.4 - linesize, White);                                         // left middle upper circle
-    fillCircle(x + scale * 1.5, y - scale * 1.3, scale * 1.75 - linesize, White);                            // Right middle upper circle
-    fillRect(x - scale * 3 + 2, y - scale + linesize - 1, scale * 5.9, scale * 2 - linesize * 2 + 2, White); // Upper and lower lines
-}
-
-void addrain(int x, int y, int scale, bool IconSize) {
-    if (IconSize == SmallIcon) {
-        setFont(OpenSans8B);
-        drawString(x - 25, y + 12, "///////", LEFT);
-    } else {
-        setFont(OpenSans18B);
-        drawString(x - 60, y + 25, "///////", LEFT);
-    }
-}
-
-void addsnow(int x, int y, int scale, bool IconSize) {
-    if (IconSize == SmallIcon) {
-        setFont(OpenSans8B);
-        drawString(x - 25, y + 15, "* * * *", LEFT);
-    } else {
-        setFont(OpenSans18B);
-        drawString(x - 60, y + 30, "* * * *", LEFT);
-    }
-}
-
-void addtstorm(int x, int y, int scale) {
-    y = y + scale / 2;
-    for (int i = 1; i < 5; i++) {
-        drawLine(x - scale * 4 + scale * i * 1.5 + 0, y + scale * 1.5, x - scale * 3.5 + scale * i * 1.5 + 0, y + scale, Black);
-        drawLine(x - scale * 4 + scale * i * 1.5 + 1, y + scale * 1.5, x - scale * 3.5 + scale * i * 1.5 + 1, y + scale, Black);
-        drawLine(x - scale * 4 + scale * i * 1.5 + 2, y + scale * 1.5, x - scale * 3.5 + scale * i * 1.5 + 2, y + scale, Black);
-        drawLine(x - scale * 4 + scale * i * 1.5, y + scale * 1.5 + 0, x - scale * 3 + scale * i * 1.5 + 0, y + scale * 1.5 + 0, Black);
-        drawLine(x - scale * 4 + scale * i * 1.5, y + scale * 1.5 + 1, x - scale * 3 + scale * i * 1.5 + 0, y + scale * 1.5 + 1, Black);
-        drawLine(x - scale * 4 + scale * i * 1.5, y + scale * 1.5 + 2, x - scale * 3 + scale * i * 1.5 + 0, y + scale * 1.5 + 2, Black);
-        drawLine(x - scale * 3.5 + scale * i * 1.4 + 0, y + scale * 2.5, x - scale * 3 + scale * i * 1.5 + 0, y + scale * 1.5, Black);
-        drawLine(x - scale * 3.5 + scale * i * 1.4 + 1, y + scale * 2.5, x - scale * 3 + scale * i * 1.5 + 1, y + scale * 1.5, Black);
-        drawLine(x - scale * 3.5 + scale * i * 1.4 + 2, y + scale * 2.5, x - scale * 3 + scale * i * 1.5 + 2, y + scale * 1.5, Black);
-    }
-}
-
-void addsun(int x, int y, int scale, bool IconSize) {
-    int linesize = 5;
-    fillRect(x - scale * 2, y, scale * 4, linesize, Black);
-    fillRect(x, y - scale * 2, linesize, scale * 4, Black);
-    DrawAngledLine(x + scale * 1.4, y + scale * 1.4, (x - scale * 1.4), (y - scale * 1.4), linesize * 1.5, Black); // Actually sqrt(2) but 1.4 is good enough
-    DrawAngledLine(x - scale * 1.4, y + scale * 1.4, (x + scale * 1.4), (y - scale * 1.4), linesize * 1.5, Black);
-    fillCircle(x, y, scale * 1.3, White);
-    fillCircle(x, y, scale, Black);
-    fillCircle(x, y, scale - linesize, White);
-}
-
-void addfog(int x, int y, int scale, int linesize, bool IconSize) {
-    if (IconSize == SmallIcon)
-        linesize = 3;
-    for (int i = 0; i < 6; i++) {
-        fillRect(x - scale * 3, y + scale * 1.5, scale * 6, linesize, Black);
-        fillRect(x - scale * 3, y + scale * 2.0, scale * 6, linesize, Black);
-        fillRect(x - scale * 3, y + scale * 2.5, scale * 6, linesize, Black);
-    }
-}
-
-void DrawAngledLine(int x, int y, int x1, int y1, int size, int color) {
-    int dx = (size / 2.0) * (x - x1) / sqrt(sq(x - x1) + sq(y - y1));
-    int dy = (size / 2.0) * (y - y1) / sqrt(sq(x - x1) + sq(y - y1));
-    fillTriangle(x + dx, y - dy, x - dx, y + dy, x1 + dx, y1 - dy, color);
-    fillTriangle(x - dx, y + dy, x1 - dx, y1 + dy, x1 + dx, y1 - dy, color);
-}
-
-void ClearSky(int x, int y, bool IconSize, String IconName) {
-    int scale = Small;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    if (IconSize == LargeIcon)
-        scale = Large;
-    y += (IconSize ? 0 : 10);
-    addsun(x, y, scale * (IconSize ? 1.7 : 1.2), IconSize);
-}
-
-void BrokenClouds(int x, int y, bool IconSize, String IconName) {
-    int scale = Small, linesize = 5;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    y += 15;
-    if (IconSize == LargeIcon)
-        scale = Large;
-    addsun(x - scale * 1.8, y - scale * 1.8, scale, IconSize);
-    addcloud(x, y, scale * (IconSize ? 1 : 0.75), linesize);
-}
-
-void FewClouds(int x, int y, bool IconSize, String IconName) {
-    int scale = Small, linesize = 5;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    y += 15;
-    if (IconSize == LargeIcon)
-        scale = Large;
-    addcloud(x + (IconSize ? 10 : 0), y, scale * (IconSize ? 0.9 : 0.8), linesize);
-    addsun((x + (IconSize ? 10 : 0)) - scale * 1.8, y - scale * 1.6, scale, IconSize);
-}
-
-void ScatteredClouds(int x, int y, bool IconSize, String IconName) {
-    int scale = Small, linesize = 5;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    y += 15;
-    if (IconSize == LargeIcon)
-        scale = Large;
-    addcloud(x - (IconSize ? 35 : 0), y * (IconSize ? 0.75 : 0.93), scale / 2, linesize); // Cloud top left
-    addcloud(x, y, scale * 0.9, linesize);                                                // Main cloud
-}
-
-void Rain(int x, int y, bool IconSize, String IconName) {
-    int scale = Small, linesize = 5;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    y += 15;
-    if (IconSize == LargeIcon)
-        scale = Large;
-    addcloud(x, y, scale * (IconSize ? 1 : 0.75), linesize);
-    addrain(x, y, scale, IconSize);
-}
-
-void ChanceRain(int x, int y, bool IconSize, String IconName) {
-    int scale = Small, linesize = 5;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    if (IconSize == LargeIcon)
-        scale = Large;
-    y += 15;
-    addsun(x - scale * 1.8, y - scale * 1.8, scale, IconSize);
-    addcloud(x, y, scale * (IconSize ? 1 : 0.65), linesize);
-    addrain(x, y, scale, IconSize);
-}
-
-void Thunderstorms(int x, int y, bool IconSize, String IconName) {
-    int scale = Small, linesize = 5;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    if (IconSize == LargeIcon)
-        scale = Large;
-    y += 5;
-    addcloud(x, y, scale * (IconSize ? 1 : 0.75), linesize);
-    addtstorm(x, y, scale);
-}
-
-void Snow(int x, int y, bool IconSize, String IconName) {
-    int scale = Small, linesize = 5;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    if (IconSize == LargeIcon)
-        scale = Large;
-    addcloud(x, y, scale * (IconSize ? 1 : 0.75), linesize);
-    addsnow(x, y, scale, IconSize);
-}
-
-void Mist(int x, int y, bool IconSize, String IconName) {
-    int scale = Small, linesize = 5;
-    if (IconName.endsWith("n"))
-        addmoon(x, y, IconSize);
-    if (IconSize == LargeIcon)
-        scale = Large;
-    addsun(x, y, scale * (IconSize ? 1 : 0.75), linesize);
-    addfog(x, y, scale, linesize, IconSize);
-}
-
-void CloudCover(int x, int y, int CloudCover) {
-    addcloud(x - 9, y, Small * 0.3, 2);     // Cloud top left
-    addcloud(x + 3, y - 2, Small * 0.3, 2); // Cloud top right
-    addcloud(x, y + 15, Small * 0.6, 2);    // Main cloud
-    drawString(x + 30, y, String(CloudCover) + "%", LEFT);
-}
-
-void Visibility(int x, int y, String Visibility) {
-    float start_angle = 0.52, end_angle = 2.61, Offset = 10;
-    int   r = 14;
-    for (float i = start_angle; i < end_angle; i = i + 0.05) {
-        drawPixel(x + r * cos(i), y - r / 2 + r * sin(i) + Offset, Black);
-        drawPixel(x + r * cos(i), 1 + y - r / 2 + r * sin(i) + Offset, Black);
-    }
-    start_angle = 3.61;
-    end_angle   = 5.78;
-    for (float i = start_angle; i < end_angle; i = i + 0.05) {
-        drawPixel(x + r * cos(i), y + r / 2 + r * sin(i) + Offset, Black);
-        drawPixel(x + r * cos(i), 1 + y + r / 2 + r * sin(i) + Offset, Black);
-    }
-    fillCircle(x, y + Offset, r / 4, Black);
-    drawString(x + 20, y, Visibility, LEFT);
-}
-
-void addmoon(int x, int y, bool IconSize) {
-    int xOffset = 65;
-    int yOffset = 12;
-    if (IconSize == LargeIcon) {
-        xOffset = 130;
-        yOffset = -40;
-    }
-    fillCircle(x - 28 + xOffset, y - 37 + yOffset, uint16_t(Small * 1.0), Black);
-    fillCircle(x - 16 + xOffset, y - 37 + yOffset, uint16_t(Small * 1.6), White);
-}
-
-void Nodata(int x, int y, bool IconSize, String IconName) {
-    if (IconSize == LargeIcon)
-        setFont(OpenSans24B);
-    else
-        setFont(OpenSans12B);
-    drawString(x - 3, y - 10, "?", CENTER);
-}
-
-void DrawMoonImage(int x, int y) {
-    Rect_t area = {.x = x, .y = y, .width = moon_width, .height = moon_height};
-    epd_draw_grayscale_image(area, (uint8_t*)moon_data);
-}
-
-void DrawSunriseImage(int x, int y) {
-    Rect_t area = {.x = x, .y = y, .width = sunrise_width, .height = sunrise_height};
-    epd_draw_grayscale_image(area, (uint8_t*)sunrise_data);
-}
-
-void DrawSunsetImage(int x, int y) {
-    Rect_t area = {.x = x, .y = y, .width = sunset_width, .height = sunset_height};
-    epd_draw_grayscale_image(area, (uint8_t*)sunset_data);
-}
-
-void DrawUVI(int x, int y) {
-    Rect_t area = {.x = x, .y = y, .width = uvi_width, .height = uvi_height};
-    epd_draw_grayscale_image(area, (uint8_t*)uvi_data);
 }
 
 /* (C) D L BIRD
