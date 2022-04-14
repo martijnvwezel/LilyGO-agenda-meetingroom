@@ -10,3 +10,10 @@ Currently, Open Weather Map is being used to show the weather on the LilyGo EPD 
 Edit `owm_credentials.h` and enter OWM API key as well as the location for which you want to display the weather data
 
 You need Platformio to compile (on VScode)
+
+
+C:\Users<Local User>.platformio\packages\framework-
+
+#define CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN 16384
+to -->
+#define CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN 32768

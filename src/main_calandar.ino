@@ -6,6 +6,8 @@
 #include "esp_adc_cal.h"       // In-built
 #include <HTTPSRedirect.h>     // In-built
 
+// #include <WiFiClientSecure.h>
+
 #include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 #include <HTTPClient.h>  // In-built
 
@@ -56,7 +58,7 @@ float humidity_readings[max_readings]    = {0};
 float rain_readings[max_readings]        = {0};
 float snow_readings[max_readings]        = {0};
 
-long SleepDuration = 60; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
+long SleepDuration = 1; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
 int  WakeupHour    = 8;  // Wakeup after 07:00 to save battery power
 int  SleepHour     = 23; // Sleep  after 23:00 to save battery power
 long StartTime     = 0;
@@ -127,6 +129,7 @@ uint8_t StartWiFi() {
         internal_server_str = WiFi.localIP().toString();
 
         Serial.println("WiFi connected at: " + WiFi.localIP().toString());
+        DisplayGeneralInfoSection();
     } else
         Serial.println("WiFi connection *** FAILED ***");
     return connectionStatus;
@@ -181,7 +184,7 @@ void setup() {
                 Attempts++;
             }
 
-            Serial.println("Received all weather data...");
+            // Serial.println("Received all weather data...");
             if (RxWeather && RxForecast) { // Only if received both Weather or Forecast proceed
                 StopWiFi();                // Reduces power consumption
                 epd_poweron();             // Switch on EPD display
@@ -201,7 +204,7 @@ void setup() {
     BeginSleep();
 }
 
-
+/*
 bool DecodeWeather(WiFiClient& json, String Type) {
     Serial.print(F("\nCreating object...and "));
     DynamicJsonDocument  doc(64 * 1024);                     // allocate the JsonDocument
@@ -296,6 +299,7 @@ bool DecodeWeather(WiFiClient& json, String Type) {
     }
     return true;
 }
+*/
 //#########################################################################################
 String ConvertUnixTime(int unix_time) {
     // Returns either '21:12  ' or ' 09:12pm' depending on Units mode
@@ -312,40 +316,33 @@ String ConvertUnixTime(int unix_time) {
 //#########################################################################################
 
 HTTPSRedirect* client_httpdirect = nullptr;
+// used to store the values of free stack and heap
+// before the HTTPSRedirect object is instantiated
+// so that they can be written to Google sheets
+// upon instantiation
+unsigned int free_heap_before = 0;
+unsigned int free_stack_before = 0;
 
-bool           create_new_agenda(const String& agenda_value) {
+bool create_new_agenda(const String& agenda_value) {
+
     // * /macros/s/{API key}/exec?title={agenda_value}
 
-
-    uint32_t freeHeap        = ESP.getFreeHeap();
-    uint32_t MIN_HEAPSIZE    = 9000;
-    uint32_t CLIENT_HEAPSIZE = 30000;
-    // attempt to correct dwindling heap with v2.4.1 of library
-    if (freeHeap < MIN_HEAPSIZE) {
-        if (client_httpdirect != nullptr) {
-            Serial.println("Deleting client - heap = " + String(freeHeap));
-            delete client_httpdirect;
-            client_httpdirect = nullptr;
-        }
-    } else if ((freeHeap > CLIENT_HEAPSIZE) && (client_httpdirect == nullptr)) {
-        Serial.println("Creating client - heap = " + String(freeHeap));
-    }
-
-
-
-
-
+    free_heap_before = ESP.getFreeHeap();
+    free_stack_before = ESP.getFreePsram();
+    Serial.printf("Free heap: %u\n", free_heap_before);
+    Serial.printf("Free stack: %u\n", free_stack_before);
 
 
     delay(100);
     // Use HTTPSRedirect class to create a new TLS connection
-    HTTPSRedirect* client_httpdirect = new HTTPSRedirect(443);
-    // client_httpdirect->setInsecure();
-    client_httpdirect->setPrintResponseBody(false);
+    client_httpdirect = new HTTPSRedirect(443);
+    client_httpdirect->setPrintResponseBody(true);
+    client_httpdirect->setInsecure();
+    client_httpdirect->setContentTypeHeader("application/json");
 
     Serial.print("Connecting to ");
     Serial.println(host_google);
-    Serial.println("No client to create event! - heap = " + String(ESP.getFreeHeap()));
+
     // Try to connect for a maximum of 5 times
     bool flag = false;
     for (int i = 0; i < 5; i++) {
@@ -364,6 +361,8 @@ bool           create_new_agenda(const String& agenda_value) {
         delete client_httpdirect;
         return false;
     }
+
+
     Serial.println("Connected to Google");
 
 
@@ -372,14 +371,17 @@ bool           create_new_agenda(const String& agenda_value) {
     String uri = String("/macros/s/") + web_app_token + String("/exec") + String("?title=") + agenda_value;
     Serial.println(host_google + uri);
 
-    client_httpdirect->GET(uri, host_google);
+    while(1){
+        client_httpdirect->GET(uri, host_google, true);
+    }
 
     String calendarData = client_httpdirect->getResponseBody();
-    Serial.print("Calendar Data---> ");
-    Serial.println(calendarData);
-    Serial.println("");
+    Serial.print("Calendar Data---> "); Serial.println(calendarData); Serial.println("");
 
+    // delete HTTPSRedirect object
     delete client_httpdirect;
+    client_httpdirect = nullptr;
+
     return true;
 }
 
