@@ -60,19 +60,42 @@ String Time_str            = "--:--:--";
 String Date_str            = "-- --- ----";
 String internal_server_str = "192.168.   .   ";
 int    wifi_signal = -110, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0, EventCnt = 0, vref = 1100;
+
 //################ PROGRAM VARIABLES and OBJECTS ##########################################
 #define max_readings 4 // Limited to 4 agenda appointments
 agenda_record_type  agenda_record[max_readings];
 int number_of_appoitments = 0;
 
 
-long SleepDuration = 1; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
+long SleepDuration = 15; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
 int  WakeupHour    = 8;  // Wakeup after 07:00 to save battery power
 int  SleepHour     = 23; // Sleep  after 23:00 to save battery power
 long StartTime     = 0;
 long SleepTimer    = 0;
 long Delta         = 30; // ESP32 rtc speed compensation, prevents display at xx:59:yy and then xx:00:yy (one minute later) to save power
 
+const char* root_ca= \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkG\n" \
+"A1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNVBAsTB1Jv\n" \
+"b3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw05ODA5MDExMjAw\n" \
+"MDBaFw0yODAxMjgxMjAwMDBaMFcxCzAJBgNVBAYTAkJFMRkwFwYDVQQKExBHbG9i\n" \
+"YWxTaWduIG52LXNhMRAwDgYDVQQLEwdSb290IENBMRswGQYDVQQDExJHbG9iYWxT\n" \
+"aWduIFJvb3QgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDaDuaZ\n" \
+"jc6j40+Kfvvxi4Mla+pIH/EqsLmVEQS98GPR4mdmzxzdzxtIK+6NiY6arymAZavp\n" \
+"xy0Sy6scTHAHoT0KMM0VjU/43dSMUBUc71DuxC73/OlS8pF94G3VNTCOXkNz8kHp\n" \
+"1Wrjsok6Vjk4bwY8iGlbKk3Fp1S4bInMm/k8yuX9ifUSPJJ4ltbcdG6TRGHRjcdG\n" \
+"snUOhugZitVtbNV4FpWi6cgKOOvyJBNPc1STE4U6G7weNLWLBYy5d4ux2x8gkasJ\n" \
+"U26Qzns3dLlwR5EiUWMWea6xrkEmCMgZK9FGqkjWZCrXgzT/LCrBbBlDSgeF59N8\n" \
+"9iFo7+ryUp9/k5DPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\n" \
+"BTADAQH/MB0GA1UdDgQWBBRge2YaRQ2XyolQL30EzTSo//z9SzANBgkqhkiG9w0B\n" \
+"AQUFAAOCAQEA1nPnfE920I2/7LqivjTFKDK1fPxsnCwrvQmeU79rXqoRSLblCKOz\n" \
+"yj1hTdNGCbM+w6DjY1Ub8rrvrTnhQ7k4o+YviiY776BQVvnGCv04zcQLcFGUl5gE\n" \
+"38NflNUVyRRBnMRddWQVDf9VMOyGj/8N7yy5Y0b2qvzfvGn9LhJIZJrglfCm7ymP\n" \
+"AbEVtQwdpf5pLGkkeB6zpxxxYu7KyJesF12KwvhHhm4qxFYxldBniYUr+WymXUad\n" \
+"DKqC5JlR3XC321Y9YeRq4VzW9v493kHMB65jUr9TU/Qr6cf9tveCX4XSQRjbgbME\n" \
+"HMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==\n" \
+"-----END CERTIFICATE-----\n";
 
 
 GFXfont  currentFont;
@@ -130,7 +153,7 @@ uint8_t StartWiFi() {
         internal_server_str = "0.0.0.0";
     }
 
-    DisplayGeneralInfoSection();
+    // DisplayGeneralInfoSection();
     return connectionStatus;
 }
 
@@ -167,7 +190,7 @@ void setup() {
         else
             WakeUp = (CurrentHour >= WakeupHour && CurrentHour <= SleepHour);
         if (WakeUp) {
-            byte       Attempts   = 1;
+            int       Attempts   = 1;
             WiFiClient WiFiclient;
 
             while (Attempts <= 2) { // Try up-to 2 time for agendadata
@@ -216,28 +239,6 @@ String ConvertUnixTime(int unix_time) {
 
 
 
-const char* root_ca= \
-"-----BEGIN CERTIFICATE-----\n" \
-"MIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkG\n" \
-"A1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNVBAsTB1Jv\n" \
-"b3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw05ODA5MDExMjAw\n" \
-"MDBaFw0yODAxMjgxMjAwMDBaMFcxCzAJBgNVBAYTAkJFMRkwFwYDVQQKExBHbG9i\n" \
-"YWxTaWduIG52LXNhMRAwDgYDVQQLEwdSb290IENBMRswGQYDVQQDExJHbG9iYWxT\n" \
-"aWduIFJvb3QgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDaDuaZ\n" \
-"jc6j40+Kfvvxi4Mla+pIH/EqsLmVEQS98GPR4mdmzxzdzxtIK+6NiY6arymAZavp\n" \
-"xy0Sy6scTHAHoT0KMM0VjU/43dSMUBUc71DuxC73/OlS8pF94G3VNTCOXkNz8kHp\n" \
-"1Wrjsok6Vjk4bwY8iGlbKk3Fp1S4bInMm/k8yuX9ifUSPJJ4ltbcdG6TRGHRjcdG\n" \
-"snUOhugZitVtbNV4FpWi6cgKOOvyJBNPc1STE4U6G7weNLWLBYy5d4ux2x8gkasJ\n" \
-"U26Qzns3dLlwR5EiUWMWea6xrkEmCMgZK9FGqkjWZCrXgzT/LCrBbBlDSgeF59N8\n" \
-"9iFo7+ryUp9/k5DPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\n" \
-"BTADAQH/MB0GA1UdDgQWBBRge2YaRQ2XyolQL30EzTSo//z9SzANBgkqhkiG9w0B\n" \
-"AQUFAAOCAQEA1nPnfE920I2/7LqivjTFKDK1fPxsnCwrvQmeU79rXqoRSLblCKOz\n" \
-"yj1hTdNGCbM+w6DjY1Ub8rrvrTnhQ7k4o+YviiY776BQVvnGCv04zcQLcFGUl5gE\n" \
-"38NflNUVyRRBnMRddWQVDf9VMOyGj/8N7yy5Y0b2qvzfvGn9LhJIZJrglfCm7ymP\n" \
-"AbEVtQwdpf5pLGkkeB6zpxxxYu7KyJesF12KwvhHhm4qxFYxldBniYUr+WymXUad\n" \
-"DKqC5JlR3XC321Y9YeRq4VzW9v493kHMB65jUr9TU/Qr6cf9tveCX4XSQRjbgbME\n" \
-"HMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==\n" \
-"-----END CERTIFICATE-----\n";
 
 bool create_new_agenda(const String& agenda_value) {
     /*
@@ -311,6 +312,7 @@ bool get_agenda_events(void){
 
 
 bool decode_agenda(String json){
+    Serial.println("Decode data..");
     Serial.println(json);
     DynamicJsonDocument  doc(1024);                     // allocate the JsonDocument
     DeserializationError error = deserializeJson(doc, json); // Deserialize the JSON document
@@ -321,27 +323,31 @@ bool decode_agenda(String json){
     }
     number_of_appoitments = 0;
     for (int r = 0; r < max_readings; r++) {
-        Serial.println("\nPeriod-" + String(r) + "--------------");
-        JsonObject root =  doc[String(r)];
-        if (root == 0){
+
+        JsonObject root = doc[String(r)];
+        if (root == 0) {
             return 1;
         }
 
-        agenda_record[r].no = r;
-        agenda_record[r].title                = root["title"].as<String>();        Serial.println("title: " + String(agenda_record[r].title));
-        agenda_record[r].description          = root["description"].as<String>();  Serial.println("description: " + String(agenda_record[r].description));
-        agenda_record[r].time                 = root["time"].as<String>();          Serial.println("time: " + String(agenda_record[r].time));
+        agenda_record[r].no          = r;
+        agenda_record[r].title       = root["title"].as<String>();
+        agenda_record[r].description = root["description"].as<String>();
+        agenda_record[r].time        = root["time"].as<String>();
+
+        Serial.println("\nPeriod-" + String(r) + "--------------");
+        Serial.println("title: " + String(agenda_record[r].title));
+        Serial.println("description: " + String(agenda_record[r].description));
+        Serial.println("time: " + String(agenda_record[r].time));
+
         number_of_appoitments++;
     }
-
-
 
     return true;
 }
 
 void DisplayWeather() { // 4.7" e-paper display is 960x540 resolution
 
-    // DisplayGeneralInfoSection(); // Top line of the display
+    DisplayGeneralInfoSection(); // Top line of the display
 
     if (number_of_appoitments > 0) {
         String time        = agenda_record[0].time;
@@ -367,7 +373,7 @@ void DisplayWeather() { // 4.7" e-paper display is 960x540 resolution
 
 void DisplayGeneralInfoSection() {
     setFont(OpenSans10B);
-    Serial.println(internal_server_str);
+
     drawString(5, 2, "http://" + internal_server_str, LEFT);
     setFont(OpenSans8B);
     drawString(250, 2, Date_str + "  @   " + Time_str, LEFT);
