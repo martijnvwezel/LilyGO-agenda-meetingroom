@@ -4,9 +4,9 @@
 #include "freertos/task.h"     // In-built
 #include "epd_driver.h"        // https://github.com/Xinyuan-LilyGO/LilyGo-EPD47
 #include "esp_adc_cal.h"       // In-built
-#include <HTTPSRedirect.h>     // In-built
 
-// #include <WiFiClientSecure.h>
+#include "HTTPSRedirect.h" // redirect http trafic
+
 
 #include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 #include <HTTPClient.h>  // In-built
@@ -14,7 +14,7 @@
 #include <WiFi.h> // In-built
 #include <SPI.h>  // In-built
 #include <time.h> // In-built
-
+#include <WiFiClientSecure.h> // In-built
 #include "owm_credentials.h"
 #include "forecast_record.h"
 #include "lang_nl.h"
@@ -45,7 +45,7 @@ boolean SmallIcon = false;
 String Time_str            = "--:--:--";
 String Date_str            = "-- --- ----";
 String internal_server_str = "000.000.000.000";
-int    wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0, EventCnt = 0, vref = 1100;
+int    wifi_signal = -110, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0, EventCnt = 0, vref = 1100;
 //################ PROGRAM VARIABLES and OBJECTS ##########################################
 #define max_readings 24 // Limited to 3-days here, but could go to 5-days = 40 as the data is issued
 
@@ -57,6 +57,7 @@ float temperature_readings[max_readings] = {0};
 float humidity_readings[max_readings]    = {0};
 float rain_readings[max_readings]        = {0};
 float snow_readings[max_readings]        = {0};
+
 
 long SleepDuration = 1; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
 int  WakeupHour    = 8;  // Wakeup after 07:00 to save battery power
@@ -132,6 +133,8 @@ uint8_t StartWiFi() {
         DisplayGeneralInfoSection();
     } else
         Serial.println("WiFi connection *** FAILED ***");
+        wifi_signal = -100 ;
+        internal_server_str = "0.0.0.0";
     return connectionStatus;
 }
 
@@ -171,28 +174,25 @@ void setup() {
             byte       Attempts   = 1;
             bool       RxWeather  = false;
             bool       RxForecast = false;
-            WiFiClient client;
+            WiFiClient WiFiclient;
 
-            // wifi client object
-            while ((RxWeather == false || RxForecast == false) && Attempts <= 2) { // Try up-to 2 time for Weather and Forecast data
-                create_new_agenda("I_AM_AWSOME");
+            while (Attempts <= 2) { // Try up-to 2 time for agendadata
+                // if (create_new_agenda("I_AM_AWSOME")) {
+                //     break;
+                // }
+                if (get_agenda_events()) {
+                    break;
+                }
 
-                // if (RxWeather == false)
-                //     RxWeather = obtainWeatherData(client, "onecall");
-                // if (RxForecast == false)
-                //     RxForecast = obtainWeatherData(client, "forecast");
                 Attempts++;
             }
 
-            // Serial.println("Received all weather data...");
-            if (RxWeather && RxForecast) { // Only if received both Weather or Forecast proceed
-                StopWiFi();                // Reduces power consumption
-                epd_poweron();             // Switch on EPD display
-                epd_clear();               // Clear the screen
-                DisplayWeather();          // Display the weather data
-                edp_update();              // Update the display to show the information
-                epd_poweroff_all();        // Switch off all power to EPD
-            }
+            StopWiFi();                // Reduces power consumption
+            epd_poweron();             // Switch on EPD display
+            epd_clear();               // Clear the screen
+            DisplayWeather();          // Display the weather data
+            edp_update();              // Update the display to show the information
+            epd_poweroff_all();        // Switch off all power to EPD
         }
     } else {
         epd_poweron();      // Switch on EPD display
@@ -204,102 +204,6 @@ void setup() {
     BeginSleep();
 }
 
-/*
-bool DecodeWeather(WiFiClient& json, String Type) {
-    Serial.print(F("\nCreating object...and "));
-    DynamicJsonDocument  doc(64 * 1024);                     // allocate the JsonDocument
-    DeserializationError error = deserializeJson(doc, json); // Deserialize the JSON document
-    if (error) {                                             // Test if parsing succeeds.
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.c_str());
-        return false;
-    }
-    // convert it to a JsonObject
-    JsonObject root = doc.as<JsonObject>();
-    Serial.println(" Decoding " + Type + " data");
-    if (Type == "onecall") {
-        // All Serial.println statements are for diagnostic purposes and some are not required, remove if not needed with //
-        WxConditions[0].High      = -50;                    // Minimum forecast low
-        WxConditions[0].Low       = 50;                     // Maximum Forecast High
-        WxConditions[0].FTimezone = doc["timezone_offset"]; // "0"
-        JsonObject current        = doc["current"];
-        WxConditions[0].Sunrise   = current["sunrise"];
-        Serial.println("SRis: " + String(WxConditions[0].Sunrise));
-        WxConditions[0].Sunset = current["sunset"];
-        Serial.println("SSet: " + String(WxConditions[0].Sunset));
-        WxConditions[0].Temperature = current["temp"];
-        Serial.println("Temp: " + String(WxConditions[0].Temperature));
-        WxConditions[0].FeelsLike = current["feels_like"];
-        Serial.println("FLik: " + String(WxConditions[0].FeelsLike));
-        WxConditions[0].Pressure = current["pressure"];
-        Serial.println("Pres: " + String(WxConditions[0].Pressure));
-        WxConditions[0].Humidity = current["humidity"];
-        Serial.println("Humi: " + String(WxConditions[0].Humidity));
-        WxConditions[0].DewPoint = current["dew_point"];
-        Serial.println("DPoi: " + String(WxConditions[0].DewPoint));
-        WxConditions[0].UVI = current["uvi"];
-        Serial.println("UVin: " + String(WxConditions[0].UVI));
-        WxConditions[0].Cloudcover = current["clouds"];
-        Serial.println("CCov: " + String(WxConditions[0].Cloudcover));
-        WxConditions[0].Visibility = current["visibility"];
-        Serial.println("Visi: " + String(WxConditions[0].Visibility));
-        WxConditions[0].Windspeed = current["wind_speed"];
-        Serial.println("WSpd: " + String(WxConditions[0].Windspeed));
-        WxConditions[0].Winddir = current["wind_deg"];
-        Serial.println("WDir: " + String(WxConditions[0].Winddir));
-        JsonObject current_weather = current["weather"][0];
-        String     Description     = current_weather["description"]; // "scattered clouds"
-        String     Icon            = current_weather["icon"];        // "01n"
-        WxConditions[0].Forecast0  = Description;
-        Serial.println("Fore: " + String(WxConditions[0].Forecast0));
-        WxConditions[0].Icon = Icon;
-        Serial.println("Icon: " + String(WxConditions[0].Icon));
-    }
-    if (Type == "forecast") {
-        // Serial.println(json);
-        Serial.print(F("\nReceiving Forecast period - ")); //------------------------------------------------
-        JsonArray list = root["list"];
-        for (byte r = 0; r < max_readings; r++) {
-            Serial.println("\nPeriod-" + String(r) + "--------------");
-            WxForecast[r].Dt          = list[r]["dt"].as<int>();
-            WxForecast[r].Temperature = list[r]["main"]["temp"].as<float>();
-            Serial.println("Temp: " + String(WxForecast[r].Temperature));
-            WxForecast[r].Low = list[r]["main"]["temp_min"].as<float>();
-            Serial.println("TLow: " + String(WxForecast[r].Low));
-            WxForecast[r].High = list[r]["main"]["temp_max"].as<float>();
-            Serial.println("THig: " + String(WxForecast[r].High));
-            WxForecast[r].Pressure = list[r]["main"]["pressure"].as<float>();
-            Serial.println("Pres: " + String(WxForecast[r].Pressure));
-            WxForecast[r].Humidity = list[r]["main"]["humidity"].as<float>();
-            Serial.println("Humi: " + String(WxForecast[r].Humidity));
-            WxForecast[r].Icon = list[r]["weather"][0]["icon"].as<char*>();
-            Serial.println("Icon: " + String(WxForecast[r].Icon));
-            WxForecast[r].Rainfall = list[r]["rain"]["3h"].as<float>();
-            Serial.println("Rain: " + String(WxForecast[r].Rainfall));
-            WxForecast[r].Snowfall = list[r]["snow"]["3h"].as<float>();
-            Serial.println("Snow: " + String(WxForecast[r].Snowfall));
-            if (r < 8) { // Check next 3 x 8 Hours = 1 day
-                if (WxForecast[r].High > WxConditions[0].High)
-                    WxConditions[0].High = WxForecast[r].High; // Get Highest temperature for next 24Hrs
-                if (WxForecast[r].Low < WxConditions[0].Low)
-                    WxConditions[0].Low = WxForecast[r].Low; // Get Lowest  temperature for next 24Hrs
-            }
-        }
-        //------------------------------------------
-        float pressure_trend  = WxForecast[0].Pressure - WxForecast[2].Pressure; // Measure pressure slope between ~now and later
-        pressure_trend        = ((int)(pressure_trend * 10)) / 10.0;             // Remove any small variations less than 0.1
-        WxConditions[0].Trend = "=";
-        if (pressure_trend > 0)
-            WxConditions[0].Trend = "+";
-        if (pressure_trend < 0)
-            WxConditions[0].Trend = "-";
-        if (pressure_trend == 0)
-            WxConditions[0].Trend = "0";
-
-    }
-    return true;
-}
-*/
 //#########################################################################################
 String ConvertUnixTime(int unix_time) {
     // Returns either '21:12  ' or ' 09:12pm' depending on Units mode
@@ -315,75 +219,97 @@ String ConvertUnixTime(int unix_time) {
 }
 //#########################################################################################
 
-HTTPSRedirect* client_httpdirect = nullptr;
-// used to store the values of free stack and heap
-// before the HTTPSRedirect object is instantiated
-// so that they can be written to Google sheets
-// upon instantiation
-unsigned int free_heap_before = 0;
-unsigned int free_stack_before = 0;
+// WiFiClientSecure client;
+HTTPClient http;
+// HTTPSRedirect* http = nullptr;
+// HTTPSRedirect http;
+
+const char* root_ca= \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkG\n" \
+"A1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNVBAsTB1Jv\n" \
+"b3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw05ODA5MDExMjAw\n" \
+"MDBaFw0yODAxMjgxMjAwMDBaMFcxCzAJBgNVBAYTAkJFMRkwFwYDVQQKExBHbG9i\n" \
+"YWxTaWduIG52LXNhMRAwDgYDVQQLEwdSb290IENBMRswGQYDVQQDExJHbG9iYWxT\n" \
+"aWduIFJvb3QgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDaDuaZ\n" \
+"jc6j40+Kfvvxi4Mla+pIH/EqsLmVEQS98GPR4mdmzxzdzxtIK+6NiY6arymAZavp\n" \
+"xy0Sy6scTHAHoT0KMM0VjU/43dSMUBUc71DuxC73/OlS8pF94G3VNTCOXkNz8kHp\n" \
+"1Wrjsok6Vjk4bwY8iGlbKk3Fp1S4bInMm/k8yuX9ifUSPJJ4ltbcdG6TRGHRjcdG\n" \
+"snUOhugZitVtbNV4FpWi6cgKOOvyJBNPc1STE4U6G7weNLWLBYy5d4ux2x8gkasJ\n" \
+"U26Qzns3dLlwR5EiUWMWea6xrkEmCMgZK9FGqkjWZCrXgzT/LCrBbBlDSgeF59N8\n" \
+"9iFo7+ryUp9/k5DPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\n" \
+"BTADAQH/MB0GA1UdDgQWBBRge2YaRQ2XyolQL30EzTSo//z9SzANBgkqhkiG9w0B\n" \
+"AQUFAAOCAQEA1nPnfE920I2/7LqivjTFKDK1fPxsnCwrvQmeU79rXqoRSLblCKOz\n" \
+"yj1hTdNGCbM+w6DjY1Ub8rrvrTnhQ7k4o+YviiY776BQVvnGCv04zcQLcFGUl5gE\n" \
+"38NflNUVyRRBnMRddWQVDf9VMOyGj/8N7yy5Y0b2qvzfvGn9LhJIZJrglfCm7ymP\n" \
+"AbEVtQwdpf5pLGkkeB6zpxxxYu7KyJesF12KwvhHhm4qxFYxldBniYUr+WymXUad\n" \
+"DKqC5JlR3XC321Y9YeRq4VzW9v493kHMB65jUr9TU/Qr6cf9tveCX4XSQRjbgbME\n" \
+"HMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==\n" \
+"-----END CERTIFICATE-----\n";
 
 bool create_new_agenda(const String& agenda_value) {
+    /*
+     * /macros/s/{API key}/exec?title={agenda_value}
+     * Token will be updated after each script deploy!
+     */
 
-    // * /macros/s/{API key}/exec?title={agenda_value}
-
-    free_heap_before = ESP.getFreeHeap();
-    free_stack_before = ESP.getFreePsram();
-    Serial.printf("Free heap: %u\n", free_heap_before);
-    Serial.printf("Free stack: %u\n", free_stack_before);
-
-
-    delay(100);
-    // Use HTTPSRedirect class to create a new TLS connection
-    client_httpdirect = new HTTPSRedirect(443);
-    client_httpdirect->setPrintResponseBody(true);
-    client_httpdirect->setInsecure();
-    client_httpdirect->setContentTypeHeader("application/json");
+    String uri_ = String("/macros/s/") + web_app_token + String("/exec") + String("?title=") + agenda_value;
+    String url_ = "https://" + String(host_google) + uri_;
 
     Serial.print("Connecting to ");
     Serial.println(host_google);
+    Serial.println(url_);
 
-    // Try to connect for a maximum of 5 times
-    bool flag = false;
-    for (int i = 0; i < 5; i++) {
-        int retval = client_httpdirect->connect(host_google, 443);
-        if (retval == 1) {
-            flag = true;
-            break;
-        } else
-            Serial.println("Connection failed. Retrying...");
+    http.begin(url_, root_ca);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    int httpCode = http.GET();
+
+    if (httpCode > 0) { // Check for the returning code
+        String payload = http.getString();
+        Serial.println(httpCode);
+        // Serial.println(payload);
+        return 1;
     }
 
-    if (!flag) {
-        Serial.print("Could not connect to server: ");
-        Serial.println(host_google);
-        Serial.println("Exiting...");
-        delete client_httpdirect;
-        return false;
+    else {
+        Serial.println("Error on HTTP request");
+        return 0;
     }
 
-
-    Serial.println("Connected to Google");
-
-
-    // * Fetch Google Calendar events
-
-    String uri = String("/macros/s/") + web_app_token + String("/exec") + String("?title=") + agenda_value;
-    Serial.println(host_google + uri);
-
-    while(1){
-        client_httpdirect->GET(uri, host_google, true);
-    }
-
-    String calendarData = client_httpdirect->getResponseBody();
-    Serial.print("Calendar Data---> "); Serial.println(calendarData); Serial.println("");
-
-    // delete HTTPSRedirect object
-    delete client_httpdirect;
-    client_httpdirect = nullptr;
-
-    return true;
 }
+
+
+bool get_agenda_events(void){
+    /*
+     * /macros/s/{API key}/exec?title={agenda_value}
+     * Token will be updated after each script deploy!
+     */
+
+    String uri_ = String("/macros/s/") + get_web_app_token + String("/exec") ;
+    String url_ = "https://" + String(host_google) + uri_;
+
+    Serial.print("Connecting to ");
+    Serial.println(host_google);
+    Serial.println(url_);
+
+    http.begin(url_, root_ca);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    int httpCode = http.GET();
+
+    if (httpCode > 0) { // Check for the returning code
+        String payload = http.getString();
+        Serial.println(httpCode);
+        Serial.println(payload);
+        return 1;
+    }
+
+    else {
+        Serial.println("Error on HTTP request");
+        return 0;
+    }
+
+}
+
 
 void DisplayWeather() { // 4.7" e-paper display is 960x540 resolution
 
@@ -488,17 +414,16 @@ void DisplayStatusSection(int x, int y, int rssi) {
 void DrawRSSI(int x, int y, int rssi) {
     int WIFIsignal = 0;
     int xpos       = 1;
-    for (int _rssi = -100; _rssi <= rssi; _rssi = _rssi + 20) {
-        if (_rssi <= -20)
-            WIFIsignal = 30; //            <-20dbm displays 5-bars
-        if (_rssi <= -40)
-            WIFIsignal = 24; //  -40dbm to  -21dbm displays 4-bars
-        if (_rssi <= -60)
-            WIFIsignal = 18; //  -60dbm to  -41dbm displays 3-bars
-        if (_rssi <= -80)
-            WIFIsignal = 12; //  -80dbm to  -61dbm displays 2-bars
+    for (int _rssi = -100; _rssi <= rssi; _rssi = _rssi + 25) {
+        if (_rssi <= -25)
+            WIFIsignal = 24; // <-25dbm 4-bars
+        if (_rssi <= -50)
+            WIFIsignal = 18; //  -50dbm to  -26dbm displays 3-bars
+        if (_rssi <= -75)
+            WIFIsignal = 12; //  -75dbm to  -51dbm displays 2-bars
         if (_rssi <= -100)
-            WIFIsignal = 6; // -100dbm to  -81dbm displays 1-bar
+            WIFIsignal = 6; //  -100dbm to  -76dbm displays 1-bar
+
         fillRect(x + xpos * 8, y - WIFIsignal, 6, WIFIsignal, Black);
         xpos++;
     }
