@@ -5,8 +5,6 @@
 #include "epd_driver.h"        // https://github.com/Xinyuan-LilyGO/LilyGo-EPD47
 #include "esp_adc_cal.h"       // In-built
 
-#include "HTTPSRedirect.h" // redirect http trafic
-
 
 #include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 #include <HTTPClient.h>  // In-built
@@ -16,8 +14,24 @@
 #include <time.h> // In-built
 #include <WiFiClientSecure.h> // In-built
 #include "owm_credentials.h"
-#include "forecast_record.h"
+#include "agenda_record.h"
 #include "lang_nl.h"
+
+// fonts
+#include <opensans8b.h>
+#include <opensans10b.h>
+#include <opensans12.h>
+#include <opensans12b.h>
+#include <opensans18b.h>
+#include <opensans14.h>
+#include <opensans14b.h>
+#include <opensans24b.h>
+#include "moon.h"
+#include "sunrise.h"
+#include "sunset.h"
+#include "uvi.h"
+
+
 
 #define SCREEN_WIDTH EPD_WIDTH
 #define SCREEN_HEIGHT EPD_HEIGHT
@@ -44,19 +58,12 @@ boolean SmallIcon = false;
 #define Small 10 // For icon drawing
 String Time_str            = "--:--:--";
 String Date_str            = "-- --- ----";
-String internal_server_str = "000.000.000.000";
+String internal_server_str = "192.168.   .   ";
 int    wifi_signal = -110, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0, EventCnt = 0, vref = 1100;
 //################ PROGRAM VARIABLES and OBJECTS ##########################################
-#define max_readings 24 // Limited to 3-days here, but could go to 5-days = 40 as the data is issued
-
-Forecast_record_type WxConditions[1];
-Forecast_record_type WxForecast[max_readings];
-
-float pressure_readings[max_readings]    = {0};
-float temperature_readings[max_readings] = {0};
-float humidity_readings[max_readings]    = {0};
-float rain_readings[max_readings]        = {0};
-float snow_readings[max_readings]        = {0};
+#define max_readings 4 // Limited to 4 agenda appointments
+agenda_record_type  agenda_record[max_readings];
+int number_of_appoitments = 0;
 
 
 long SleepDuration = 1; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
@@ -66,19 +73,7 @@ long StartTime     = 0;
 long SleepTimer    = 0;
 long Delta         = 30; // ESP32 rtc speed compensation, prevents display at xx:59:yy and then xx:00:yy (one minute later) to save power
 
-// fonts
-#include <opensans8b.h>
-#include <opensans10b.h>
-#include <opensans12.h>
-#include <opensans12b.h>
-#include <opensans18b.h>
-#include <opensans14.h>
-#include <opensans14b.h>
-#include <opensans24b.h>
-#include "moon.h"
-#include "sunrise.h"
-#include "sunset.h"
-#include "uvi.h"
+
 
 GFXfont  currentFont;
 uint8_t* framebuffer;
@@ -125,16 +120,17 @@ uint8_t StartWiFi() {
         delay(50);
     }
     if (connectionStatus == WL_CONNECTED) {
-        wifi_signal = WiFi.RSSI(); // Get Wifi Signal strength now, because the WiFi will be turned off to save power!
-
+        wifi_signal         = WiFi.RSSI(); // Get Wifi Signal strength now, because the WiFi will be turned off to save power!
         internal_server_str = WiFi.localIP().toString();
+        Serial.println("WiFi connected at: " + internal_server_str);
 
-        Serial.println("WiFi connected at: " + WiFi.localIP().toString());
-        DisplayGeneralInfoSection();
-    } else
+    } else {
         Serial.println("WiFi connection *** FAILED ***");
-        wifi_signal = -100 ;
+        wifi_signal         = -100;
         internal_server_str = "0.0.0.0";
+    }
+
+    DisplayGeneralInfoSection();
     return connectionStatus;
 }
 
@@ -172,8 +168,6 @@ void setup() {
             WakeUp = (CurrentHour >= WakeupHour && CurrentHour <= SleepHour);
         if (WakeUp) {
             byte       Attempts   = 1;
-            bool       RxWeather  = false;
-            bool       RxForecast = false;
             WiFiClient WiFiclient;
 
             while (Attempts <= 2) { // Try up-to 2 time for agendadata
@@ -219,10 +213,8 @@ String ConvertUnixTime(int unix_time) {
 }
 //#########################################################################################
 
-// WiFiClientSecure client;
-HTTPClient http;
-// HTTPSRedirect* http = nullptr;
-// HTTPSRedirect http;
+
+
 
 const char* root_ca= \
 "-----BEGIN CERTIFICATE-----\n" \
@@ -260,20 +252,22 @@ bool create_new_agenda(const String& agenda_value) {
     Serial.println(host_google);
     Serial.println(url_);
 
+    HTTPClient http;
     http.begin(url_, root_ca);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     int httpCode = http.GET();
 
-    if (httpCode > 0) { // Check for the returning code
+    if (httpCode == HTTP_CODE_OK) { // Check for the returning code
         String payload = http.getString();
         Serial.println(httpCode);
         // Serial.println(payload);
-        return 1;
+        http.end();
+        return true;
     }
-
     else {
         Serial.println("Error on HTTP request");
-        return 0;
+        http.end();
+        return false;
     }
 
 }
@@ -292,50 +286,88 @@ bool get_agenda_events(void){
     Serial.println(host_google);
     Serial.println(url_);
 
+    HTTPClient http;
     http.begin(url_, root_ca);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     int httpCode = http.GET();
 
     if (httpCode > 0) { // Check for the returning code
         String payload = http.getString();
+        http.end();
         Serial.println(httpCode);
-        Serial.println(payload);
+        // Serial.println(payload);
+        decode_agenda(payload);
         return 1;
     }
 
     else {
         Serial.println("Error on HTTP request");
+        http.end();
         return 0;
     }
 
 }
 
 
+
+bool decode_agenda(String json){
+    Serial.println(json);
+    DynamicJsonDocument  doc(1024);                     // allocate the JsonDocument
+    DeserializationError error = deserializeJson(doc, json); // Deserialize the JSON document
+    if (error) {                                             // Test if parsing succeeds.
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.c_str());
+        return false;
+    }
+    number_of_appoitments = 0;
+    for (int r = 0; r < max_readings; r++) {
+        Serial.println("\nPeriod-" + String(r) + "--------------");
+        JsonObject root =  doc[String(r)];
+        if (root == 0){
+            return 1;
+        }
+
+        agenda_record[r].no = r;
+        agenda_record[r].title                = root["title"].as<String>();        Serial.println("title: " + String(agenda_record[r].title));
+        agenda_record[r].description          = root["description"].as<String>();  Serial.println("description: " + String(agenda_record[r].description));
+        agenda_record[r].time                 = root["time"].as<String>();          Serial.println("time: " + String(agenda_record[r].time));
+        number_of_appoitments++;
+    }
+
+
+
+    return true;
+}
+
 void DisplayWeather() { // 4.7" e-paper display is 960x540 resolution
 
-    DisplayGeneralInfoSection(); // Top line of the display
+    // DisplayGeneralInfoSection(); // Top line of the display
 
-    String time        = "04:00 - 16:00";
-    String organisator = "Martijn van Wezel";
-    String titel       = "End of the Month - Internal IT";
-    DisplayTimeBox_current(50, 100, time, organisator, titel);
+    if (number_of_appoitments > 0) {
+        String time        = agenda_record[0].time;
+        String title       = agenda_record[0].title;
+        String description = agenda_record[0].description;
 
-    time           = "16:00 - 16:30";
-    String details = "Booked";
-    DisplayTimeBox_comming(50, 200, time, details);
+        DisplayTimeBox_current(50, 100, time, title, description);
+    }
+    if (number_of_appoitments > 1) {
+        int maxshow = number_of_appoitments;
+        if (max_readings < number_of_appoitments) {
+            maxshow = max_readings;
+        }
+        for (size_t i = 1; i < maxshow; i++) {
+            String time  = agenda_record[i].time;
+            String title = agenda_record[i].title;
 
-    time    = "16:30 - 24:00";
-    details = "Available";
-    DisplayTimeBox_comming(50, 260, time, details);
-
-    // * Weather stuff
-    // DisplayMainWeatherSection(450, 300);           // Centre section of display for Location, temperatur
-    // DisplayForecastSection(450, 350); // 3hr forecast boxes
+            int new_start_pos_y = 200 + (i - 1) * 60;
+            DisplayTimeBox_comming(50, new_start_pos_y, time, title);
+        }
+    }
 }
 
 void DisplayGeneralInfoSection() {
     setFont(OpenSans10B);
-
+    Serial.println(internal_server_str);
     drawString(5, 2, "http://" + internal_server_str, LEFT);
     setFont(OpenSans8B);
     drawString(250, 2, Date_str + "  @   " + Time_str, LEFT);
