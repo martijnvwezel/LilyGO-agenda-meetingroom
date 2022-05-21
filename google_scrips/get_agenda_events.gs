@@ -12,7 +12,7 @@ function GetEvents() {
   let Cal = CalendarApp.getCalendarsByName(_calendarName)[0];
   let Now = new Date();
   let Later = new Date();
-  Later.setSeconds(Now.getSeconds() + 60 * 60 * 24*7);// next 24 hour, or days
+  Later.setSeconds(Now.getSeconds() + 60 * 60 * 24*8);// next 24 hour, or days
   let events = Cal.getEvents(Now, Later);
 
 
@@ -43,7 +43,7 @@ function GetEvents() {
     };
   }
 
-  // Logger.log(JSON.stringify(agenda_points));
+  Logger.log(JSON.stringify(agenda_points));
   return JSON.stringify(agenda_points);
 
 }
