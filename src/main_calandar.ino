@@ -137,9 +137,15 @@ uint8_t StartWiFi() {
         if (millis() > start + 15000) { // Wait 15-secs maximum
             AttemptConnection = false;
         }
-        if (connectionStatus == WL_CONNECTED || connectionStatus == WL_CONNECT_FAILED) {
+
+        if (connectionStatus == WL_CONNECTED) {
             AttemptConnection = false;
+        } else if (connectionStatus == WL_CONNECT_FAILED){
+            ESP.restart(); // bug if it failed to connect: https://www.upesy.com/blogs/tutorials/how-to-connect-wifi-acces-point-with-esp32#:~:text=Restart%20the%20ESP32,Fi%2C%20we%20restart%20the%20ESP32.
         }
+
+
+
         delay(50);
     }
     if (connectionStatus == WL_CONNECTED) {
@@ -189,6 +195,7 @@ void setup() {
             WakeUp = (CurrentHour >= WakeupHour || CurrentHour <= SleepHour);
         else
             WakeUp = (CurrentHour >= WakeupHour && CurrentHour <= SleepHour);
+            WakeUp = true;
         if (WakeUp) {
             int       Attempts   = 1;
             WiFiClient WiFiclient;
