@@ -321,7 +321,7 @@ bool get_agenda_events(void){
 bool decode_agenda(String json){
     Serial.println("Decode data..");
     Serial.println(json);
-    DynamicJsonDocument  doc(1024);                     // allocate the JsonDocument
+    DynamicJsonDocument  doc(10*1024);                     // allocate the JsonDocument
     DeserializationError error = deserializeJson(doc, json); // Deserialize the JSON document
     if (error) {                                             // Test if parsing succeeds.
         Serial.print(F("deserializeJson() failed: "));
