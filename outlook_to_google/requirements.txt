@@ -10,7 +10,7 @@ google-auth-httplib2==0.1.0
 google-auth-oauthlib==0.5.1
 googleapis-common-protos==1.56.2
 httplib2==0.20.4
-idna==3.3
+idna==3.31
 mccabe==0.6.1
 O365==2.0.19
 oauthlib==3.2.0

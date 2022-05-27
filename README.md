@@ -86,3 +86,22 @@ The script connects to the Microsoft API using the [O365 package](https://github
 -> TODO Finish this writing..
 
 redirect url opgezet en onder clients een token aangemaakt
+
+
+# Put it in a docker contrainer for syncing
+Change your timezone in the `Dockerfile` if needed.
+```
+
+cd outlook_to_google/
+
+# linux use the following if you want to experiment
+DOCKER_BUILDKIT=1 docker build . --tag=outlook_gmail_sync:local
+
+# windows  use the following if you want to experiment
+set DOCKER_BUILDKIT=0
+docker build . --tag=outlook_gmail_sync:local
+
+
+# linux/winhows use the following if you want to experiment
+docker build . --tag=outlook_gmail_sync:local
+```

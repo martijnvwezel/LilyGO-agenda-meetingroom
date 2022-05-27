@@ -21,12 +21,14 @@ def authenticate_outlook():
     token_backend = FileSystemTokenBackend(
         token_path=config.outlook_token_path, token_filename=config.outlook_token_filename
     )
-    account = Account(credentials, token_backend=token_backend,tenant_id=config.outlook_client_tenant)
+    account = Account(credentials, token_backend=token_backend,
+                      tenant_id=config.outlook_client_tenant)
     if not account.is_authenticated:
         # not authenticated, throw error
         account.authenticate(scopes=config.outlook_scopes)
 
-    connection = Connection(credentials, token_backend=token_backend, scopes=config.outlook_scopes)
+    connection = Connection(
+        credentials, token_backend=token_backend, scopes=config.outlook_scopes)
     connection.refresh_token()
 
     print("Authenticated Outlook.")
@@ -57,19 +59,22 @@ def get_outlook_events(cal):
     start = dt.datetime.today() - dt.timedelta(days=config.previous_days)
     end = dt.datetime.today() + dt.timedelta(days=config.future_days)
     query = (
-        cal.new_query("start").greater_equal(start).chain("and").on_attribute("end").less_equal(end)
+        cal.new_query("start").greater_equal(start).chain(
+            "and").on_attribute("end").less_equal(end)
     )
     events = cal.get_events(query=query, limit=None, include_recurring=True)
     events = list(events)
 
     elapsed_time = time.time() - start_time
-    print("Retrieved {} events from Outlook in {:.1f} secs.".format(len(events), elapsed_time))
+    print("Retrieved {} events from Outlook in {:.1f} secs.".format(
+        len(events), elapsed_time))
     return events
 
 
 def clean_subject(subject):
     # remove prefix clutter from an outlook event subject
-    remove = ["Fwd: ", "Invitation: ", "Updated invitation: ", "Updated invitation with note: "]
+    remove = ["Fwd: ", "Invitation: ", "Updated invitation: ",
+              "Updated invitation with note: "]
     for s in remove:
         subject = subject.replace(s, "")
     return subject
@@ -127,21 +132,25 @@ def delete_google_events(se):
     i = 1
     while "nextPageToken" in result:
         npt = result["nextPageToken"]
-        result = se.list(calendarId=gcid, maxResults=mr, pageToken=npt).execute()
+        result = se.list(calendarId=gcid, maxResults=mr,
+                         pageToken=npt).execute()
         gcal_events.extend(result.get("items", []))
         i += 1
 
-    print("Retrieved {} events across {} pages from Google.".format(len(gcal_events), i))
+    print("Retrieved {} events across {} pages from Google.".format(
+        len(gcal_events), i))
 
     # delete each event retrieved
     for gcal_event in gcal_events:
-        request = se.delete(calendarId=config.google_calendar_id, eventId=gcal_event["id"])
+        request = se.delete(
+            calendarId=config.google_calendar_id, eventId=gcal_event["id"])
         result = request.execute()
         assert result == ""
         time.sleep(config.pause)
 
     elapsed_time = time.time() - start_time
-    print("Deleted {} events from Google in {:.1f} secs.".format(len(gcal_events), elapsed_time))
+    print("Deleted {} events from Google in {:.1f} secs.".format(
+        len(gcal_events), elapsed_time))
 
 
 def add_google_events(se, events):
@@ -150,12 +159,14 @@ def add_google_events(se, events):
 
     for event in events:
         e = build_gcal_event(event)
-        result = se.insert(calendarId=config.google_calendar_id, body=e).execute()
+        result = se.insert(
+            calendarId=config.google_calendar_id, body=e).execute()
         assert isinstance(result, dict)
         time.sleep(config.pause)
 
     elapsed_time = time.time() - start_time
-    print("Added {} events to Google in {:.1f} secs.".format(len(events), elapsed_time))
+    print("Added {} events to Google in {:.1f} secs.".format(
+        len(events), elapsed_time))
 
 
 def get_event_timestamps(outlook_events):
@@ -192,32 +203,39 @@ def check_ts_match(new_events):
     return True
 
 
-current_time = "{:%Y-%m-%d %H:%M:%S}".format(dt.datetime.now())
-print("Started at {}.".format(current_time))
-start_time = time.time()
+def main():
+    current_time = "{:%Y-%m-%d %H:%M:%S}".format(dt.datetime.now())
+    print("Started at {}.".format(current_time))
+    start_time = time.time()
 
-# authenticate outlook and google credentials
-outlook_acct = authenticate_outlook()
-se = authenticate_google()
+    # authenticate outlook and google credentials
+    outlook_acct = authenticate_outlook()
+    se = authenticate_google()
 
-# get all events from outlook
-outlook_cal = outlook_acct.schedule().get_default_calendar()
-outlook_events = get_outlook_events(outlook_cal)
-outlook_events_ts = get_event_timestamps(outlook_events)
+    # get all events from outlook
+    outlook_cal = outlook_acct.schedule().get_default_calendar()
+    outlook_events = get_outlook_events(outlook_cal)
+    outlook_events_ts = get_event_timestamps(outlook_events)
 
-# check if all the current event ids/timestamps match the previous run
-# only update google calendar if they don't all match (means there are changes)
-if config.force or not check_ts_match(outlook_events_ts):
-    # delete all existing google events then add all outlook events
-    delete_google_events(se)
-    add_google_events(se, outlook_events)
+    # check if all the current event ids/timestamps match the previous run
+    # only update google calendar if they don't all match (means there are changes)
+    if config.force or not check_ts_match(outlook_events_ts):
+        # delete all existing google events then add all outlook events
+        delete_google_events(se)
+        add_google_events(se, outlook_events)
 
-    # save event ids/timestamps json to disk for the next run
-    with open(config.events_ts_json_path, "w") as f:
-        json.dump(outlook_events_ts, f)
-else:
-    print("No changes found.")
+        # save event ids/timestamps json to disk for the next run
+        with open(config.events_ts_json_path, "w") as f:
+            json.dump(outlook_events_ts, f)
+    else:
+        print("No changes found.")
 
-# all done
-elapsed_time = time.time() - start_time
-print("Finished in {:.1f} secs.\n".format(elapsed_time))
+    # all done
+    elapsed_time = time.time() - start_time
+    print("Finished in {:.1f} secs.\n".format(elapsed_time))
+
+
+# if __name__ == "__main__":
+while True:
+    main()
+    time.sleep(60*15) # * 15 min
