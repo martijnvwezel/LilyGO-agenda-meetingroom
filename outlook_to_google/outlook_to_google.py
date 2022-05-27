@@ -235,7 +235,7 @@ def main():
     print("Finished in {:.1f} secs.\n".format(elapsed_time))
 
 
-# if __name__ == "__main__":
-while True:
-    main()
-    time.sleep(60*15) # * 15 min
+if __name__ == "__main__":
+    while True:
+        main()
+        time.sleep(60*15) # * 15 min

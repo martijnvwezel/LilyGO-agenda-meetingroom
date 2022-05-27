@@ -1,7 +1,11 @@
 # LilyGo-EPD-4-7
 
 The LilyGO is an 4.7" e-paper screen. For this project the ESP32 will be located infront of a meetingroom.
-Currently, Open Weather Map is being used to show the weather on the LilyGo EPD 4.7" display.
+> My screen has some black shades, I broke thoses pixels
+
+<img src="docs/screen_v1.png">
+
+
 
 # Google scrips
 To actually create google scripts go to the folder `google_scrips/`  and change the agenda names if needed.
@@ -104,4 +108,10 @@ docker build . --tag=outlook_gmail_sync:local
 
 # linux/winhows use the following if you want to experiment
 docker build . --tag=outlook_gmail_sync:local
+
+
+# testing
+docker run -it outlook_gmail_sync:local
+# prod
+docker run -d outlook_gmail_sync:local
 ```

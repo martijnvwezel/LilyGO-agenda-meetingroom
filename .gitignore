@@ -12,3 +12,6 @@ outlook_to_gmail/credentials/outlook*
 lucky-history-*
 events_ts.json
 config.py
+outlook_token.txt
+google_*
+.pdm.toml
