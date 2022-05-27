@@ -5,3 +5,10 @@ src/owm_credentials.h
 .vscode/c_cpp_properties.json
 .pio
 .cache
+outlook_to_gmail/credentials/google*
+outlook_to_gmail/credentials/outlook*
+**/__pycache__
+**/__pypackages__
+lucky-history-*
+events_ts.json
+config.py

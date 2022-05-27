@@ -60,5 +60,5 @@ function convert_time_string(time) {
   return padTo2Digits(time.getHours()) + ':' + padTo2Digits(time.getMinutes());
 }
 function date_convert(time){
-  return padTo2Digits(time.getDate()) +'-'+ padTo2Digits(time.getMonth());
+  return padTo2Digits(time.getDate()) +'-'+ padTo2Digits(time.getMonth())+1;
 }
